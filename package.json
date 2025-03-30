@@ -14,7 +14,7 @@
         "color": "#f1f5f8"
     },
     "icon": "tailwind-raw-reorder-icon.gif",
-    "version": "3.2.0",
+    "version": "3.2.1",
     "publisher": "Trapfether",
     "license": "MIT",
     "author": "Andrew Trefethen <andrew.l.trefethen@gmail.com>",
@@ -124,12 +124,51 @@
                         "description": "A flag that controls whether or not Tailwind Raw Reorder will sort your Tailwind CSS classes on save.",
                         "scope": "window"
                     },
-										"tailwind-raw-reorder.tailwindConfigPath": {
-												"type": ["string", "null"],
-												"default": null,
-												"description": "The path to your tailwind.config.js file. This is used to determine the order of your classes.",
-												"scope": "window"
-										}
+                    "tailwind-raw-reorder.tailwindConfigPath": {
+                            "type": ["string", "null"],
+                            "default": null,
+                            "description": "The path to your tailwind.config.js file. This is used to determine the order of your classes.",
+                            "scope": "window"
+                    },
+                    "tailwind-raw-reorder.highlightTimeout": {
+                        "type": [
+                            "number"
+                        ],
+                        "default": 7000,
+                        "description": "Change the length of time that the classes that move are highlighted for (in seconds).",
+                        "scope": "window"
+                    },
+                    "tailwind-raw-reorder.highlightColor": {
+                        "type": "string",
+                        "default": "textLink.activeForeground",
+                        "description": "The theme color used to highlight moved classes. Your theme colors may be referenced differently. See the VSCode documentation for more information.",
+                        "enum": [
+                        "textLink.activeForeground",
+                        "editor.foreground",
+                        "editor.selectionBackground",
+                        "editor.lineHighlightBackground",
+                        "editorBracketHighlight.foreground1",
+                        "editorBracketHighlight.foreground2",
+                        "editorBracketHighlight.foreground3",
+                        "editorBracketHighlight.foreground4",
+                        "editorBracketHighlight.foreground5",
+                        "editorBracketHighlight.foreground6",
+                        "editorWhitespace.foreground"
+                        ],
+                        "enumDescriptions": [
+                        "textLink.activeForeground",
+                        "editor.foreground",
+                        "editor.selectionBackground",
+                        "editor.lineHighlightBackground",
+                        "editorBracketHighlight.foreground1",
+                        "editorBracketHighlight.foreground2",
+                        "editorBracketHighlight.foreground3",
+                        "editorBracketHighlight.foreground4",
+                        "editorBracketHighlight.foreground5",
+                        "editorBracketHighlight.foreground6",
+                        "editorWhitespace.foreground"
+                        ]
+                    }
                 }
             }
         ]

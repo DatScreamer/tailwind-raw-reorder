@@ -1,7 +1,7 @@
 // @ts-check
 'use strict';
 
-import { commands, workspace, Range, window } from 'vscode';
+import { commands, workspace, Range, window, ThemeColor } from 'vscode';
 import { getTextMatch, buildMatchers } from './utils.mjs';
 import { spawn } from 'child_process';
 import { rustyWindPath } from 'rustywind';
@@ -41,6 +41,14 @@ const tailwindConfigPath =
 (workspaceFolder && rawTailwindConfigPath && expandRelativePath(workspaceFolder, rawTailwindConfigPath));
 const outputLogChannel = window.createOutputChannel('Tailwind Raw Reorder');
 
+let currentHighlightColor = 'textLink.activeForeground'; // Default value
+let currentHighlightTimeout = 7000; // Default value in milliseconds
+
+/**
+ * @type {import("vscode").TextEditorDecorationType[]}
+ */
+let activeDecorationTypes = []; // Store the active decoration type
+
 /**
  * @param {ExtensionContext} context
  */
@@ -51,6 +59,24 @@ export function activate(context) {
 		outputLogChannel.appendLine(message);
 		return;
 	}
+
+  // Register the listener for configuration changes
+  workspace.onDidChangeConfiguration((event) => {
+    // Handle highlightColor changes
+    if (event.affectsConfiguration('tailwind-raw-reorder.highlightColor')) {
+      currentHighlightColor = workspace
+        .getConfiguration('tailwind-raw-reorder')
+        .get('highlightColor', 'textLink.activeForeground');
+      clearDecorations();
+    }
+
+    // Handle highlightTimeout changes
+    if (event.affectsConfiguration('tailwind-raw-reorder.highlightTimeout')) {
+      currentHighlightTimeout = workspace
+        .getConfiguration('tailwind-raw-reorder')
+        .get('highlightTimeout', 7) * 1000; // Convert seconds to milliseconds
+    }
+  });
 
   let disposable = commands.registerTextEditorCommand(
     'tailwind-raw-reorder.sortTailwindClasses',
@@ -98,10 +124,40 @@ export function activate(context) {
             env: tailwindConfig
           };
 
-          edit.replace(
-            range,
-            sortClasses(text, options)
-          );
+          const sortedText = sortClasses(text, options);
+
+          edit.replace(range, sortedText);
+
+          let movedClasses = findMovedClasses(text, sortedText)
+          highlightMovedClasses(startPosition, editor, movedClasses);
+
+          // Listen for document changes to clear decorations on undo
+          if (movedClasses.length === activeDecorationTypes.length) {
+            const documentChangeListener = workspace.onDidChangeTextDocument((event) => {
+              const editor = window.activeTextEditor;
+              // Ignore changes in other documents
+              if (!editor || event.document !== editor.document) {
+                return;
+              }
+          
+              const currentText = editor.document.getText();
+              const originalText = editorText;
+          
+              if (currentText === originalText && activeDecorationTypes) {
+                clearDecorations();
+                documentChangeListener.dispose();
+              }
+            });
+
+            context.subscriptions.push(documentChangeListener);
+
+            // Clear the decorations after 7 seconds
+            setTimeout(() => {
+              clearDecorations();
+              documentChangeListener.dispose(); // Dispose of the listener after use
+            }, currentHighlightTimeout);
+
+          }
         });
       }
     }
@@ -202,4 +258,114 @@ export function activate(context) {
       })
     );
   }
+}
+
+/**
+ * @param {string} str1
+ * @param {string} str2
+ */
+function findMovedClasses(str1, str2) {
+  if(!str1 || !str2) {
+    console.log("One of the strings is empty");
+    return [];
+  }
+  const classes1 = str1.split(/\s+/);
+  const classes2 = str2.split(/\s+/);
+
+  // Find longest common subsequence (LCS)
+  /**
+   * @param {string | any[]} arr1
+   * @param {string | any[]} arr2
+  */
+  function lcs(arr1, arr2) {
+      let dp = Array(arr1.length + 1).fill(null).map(() => Array(arr2.length + 1).fill(0));
+
+      for (let i = 1; i <= arr1.length; i++) {
+          for (let j = 1; j <= arr2.length; j++) {
+              if (arr1[i - 1] === arr2[j - 1]) {
+                  dp[i][j] = dp[i - 1][j - 1] + 1;
+              } else {
+                  dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
+              }
+          }
+      }
+
+      let i = arr1.length, j = arr2.length, lcsArr = [];
+      while (i > 0 && j > 0) {
+          if (arr1[i - 1] === arr2[j - 1]) {
+              lcsArr.unshift(arr1[i - 1]);
+              i--; j--;
+          } else if (dp[i - 1][j] >= dp[i][j - 1]) {
+              i--;
+          } else {
+              j--;
+          }
+      }
+      return new Set(lcsArr);
+  }
+
+  const commonClasses = lcs(classes1, classes2);
+
+  /**
+   * @param {string} str
+   * @param {Set<any>} commonSet
+   */
+  function filterCommonClasses(str, commonSet) {
+      let classes = str.split(/\s+/);
+      let index = 0;
+      let seen = new Map();
+
+      return classes
+          .map(className => {
+              let startIndex = str.indexOf(className, seen.get(className) || index);
+              seen.set(className, startIndex + className.length); // Track last occurrence
+              return { className, charStart: startIndex };
+          })
+          .filter(({ className }) => !commonSet.has(className)); // Only return classes not in LCS
+  }
+
+  return filterCommonClasses(str2, commonClasses); // Only return moved classes in str2
+}
+
+/**
+ * @param {any} startPosition
+ * @param {{ document: { positionAt: (arg0: any) => any; }; setDecorations: (arg0: import("vscode").TextEditorDecorationType, arg1: Range[]) => void; }} editor
+ * @param {any[]} classes
+ */
+function highlightMovedClasses(startPosition, editor, classes) {
+  if(!classes || classes.length === 0) {
+    return;
+  }
+  
+  let decorationTypes = [];
+
+  // Collect all ranges for the changed classes
+  // range = start and end character indexes
+  /**
+   * @typedef {{ className: string; charStart: number; }} ClassObject
+   * @typedef {import("vscode").TextEditorDecorationType} TextEditorDecorationType
+   * @typedef {import("vscode").Range} Range
+   */
+  const ranges = classes
+    .filter((classObj) => classObj.charStart !== -1) // Ensure the classes exists in str2
+    .map((classObj) => {
+      const startPos = editor.document.positionAt(startPosition + classObj.charStart);
+      const endPos = editor.document.positionAt(startPosition + classObj.charStart + classObj.className.length);
+      console.log("Start position:", startPos, "End position:", endPos);
+      const range = new Range(startPos, endPos);
+      const decorationType = window.createTextEditorDecorationType({
+        color: new ThemeColor(currentHighlightColor), // Set the desired background color for moved classes
+      });
+      if (startPos && endPos && range) {
+        editor.setDecorations(decorationType, [range]);
+        activeDecorationTypes.push(decorationType);
+      }
+    });
+}
+
+function clearDecorations() {
+  for (const decorationType of activeDecorationTypes) {
+    decorationType.dispose();
+  }
+  activeDecorationTypes = [];
 }
