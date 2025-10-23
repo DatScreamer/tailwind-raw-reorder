@@ -1,3 +1,8 @@
+# DatScreamer fork details:
+
+- Made it easy to spot classes after they move by styling them with Theme Syntax Highlighting colors.
+- Also added configuration options for highlighting color and highlighting timeout
+
 # Tailwind Raw Reorder
 
 <!-- [![CircleCI](https://circleci.com/gh/heybourn/headwind.svg?style=svg)](https://circleci.com/gh/heybourn/headwind) -->
